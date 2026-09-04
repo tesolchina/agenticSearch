@@ -13,11 +13,36 @@ import express from "express";
 import { crawlSite, deriveTitles } from "./src/crawler.js";
 import { ensureIndexTable, buildFromDataGovHk, searchIndex, upsertPage } from "./src/indexStore.js";
 import { getPool } from "./src/indexStore.js";
+import { planFromIntake, llmAvailable } from "./src/planner.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.get("/healthz", (req, res) => res.json({ ok: true }));
+app.get("/healthz", (req, res) =>
+  res.json({ ok: true, llm: llmAvailable(), searchProvider: process.env.BRAVE_API_KEY ? "brave" : process.env.TAVILY_API_KEY ? "tavily" : "duckduckgo" })
+);
+
+// V2 stage 2-4: from intake to an approved-able crawl proposal
+app.post("/api/agent/plan", express.json({ limit: "1mb" }), async (req, res) => {
+  const intake = {
+    topic: (req.body?.topic || "").trim(),
+    documentsNeeded: (req.body?.documentsNeeded || "").trim(),
+    researchQuestions: (Array.isArray(req.body?.researchQuestions)
+      ? req.body.researchQuestions
+      : String(req.body?.researchQuestions || "")
+          .split("\n")
+          .map((s) => s.trim())
+    ).filter(Boolean).slice(0, 8),
+    scope: (req.body?.scope || "").trim(),
+  };
+  if (!intake.topic) return res.status(400).json({ error: "topic is required" });
+  try {
+    res.json(await planFromIntake(intake));
+  } catch (err) {
+    console.error("agent plan error:", err);
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
 
 app.post("/api/crawl", express.json({ limit: "1mb" }), async (req, res) => {
   const objective = (req.body?.objective || "").trim();
