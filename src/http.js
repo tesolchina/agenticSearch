@@ -15,7 +15,7 @@ export const UA =
 const strictAgent = new Agent();
 const lenientAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
-export async function fetchWithTimeout(url, timeoutMs = 15000) {
+export async function fetchWithTimeout(url, timeoutMs = 15000, extraHeaders = {}) {
   const attempt = async (dispatcher) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -24,7 +24,7 @@ export async function fetchWithTimeout(url, timeoutMs = 15000) {
         signal: ctrl.signal,
         redirect: "follow",
         dispatcher,
-        headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,*/*;q=0.8" },
+        headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,*/*;q=0.8", ...extraHeaders },
       });
     } finally {
       clearTimeout(t);
