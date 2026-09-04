@@ -1,0 +1,82 @@
+V2 PLAN — AGENTIC SEARCH FOR GCAP3056
+Drafted 2026-09-04. V1 remains untouched as "pilot01" (search.simonsays.hk/pilot). V2 will be built separately and mounted at /pilot02 when ready.
+PART 1 — THE TASK DEFINITION (input / process / output)
+INPUT (what the student provides at intake):
+1. Research topic — free text, e.g. "Fire at Tai Po Wang Fuk Court: what might be covered in the final report".
+2. Documents needed — checklist of artefact types, e.g. government press releases, official investigation reports, LegCo Q&A and motions, news chronology, casualty/damage data, building/estate records, academic background (fire safety codes).
+3. Research questions — 2-5 questions the report must answer, e.g. "What was the timeline of the fire?", "Which regulations are implicated?", "What policy responses followed?"
+4. Target scope — time range (e.g. event date to present), geography (HK only), source classes (official first, media second, academic third), language(s), and depth (quick scan vs full evidence pack).
+PROCESS (what the agent does — see Part 3 for the pipeline):
+The agent, not a fixed list, decides what to search and where to crawl. It runs preliminary web searches first, reads the results, then decides which domains are authoritative and worth crawling deeply, with student approval before the crawl.
+OUTPUT:
+A structured evidence pack per research question: relevant web pages and documents (full text), each with source type (official/media/academic/data), relevance score, summary, date, and citation-ready metadata; plus a coverage report showing which research questions are answered, partially answered, or still open.
+PART 2 — THE FUNDAMENTAL QUESTION: WEB SEARCH vs WEB CRAWLER
+V1 conflated the two. V2 assigns each a distinct role, mirroring how gpt-researcher and deep-research style agents work:
+WEB SEARCH (discovery layer — broad, shallow, always first)
+- Purpose: find out WHAT EXISTS — which sites, pages, documents, and datasets relate to the topic; surface angles the student did not anticipate.
+- Tools: one or more web search APIs (SerpAPI, Brave Search API, Bing, or Tavily; SearXNG as a self-hosted aggregator option).
+- Cost: cheap, fast, wide. No crawling of large sites.
+- Output: candidate URLs + snippets + query coverage per research question.
+WEB CRAWLER (evidence layer — narrow, deep, second)
+- Purpose: COLLECT THE FULL MATERIAL from the domains that preliminary search proved authoritative — every relevant page, complete text, no snippet truncation, politely and systematically.
+- Trigger: only after the agent proposes a crawl plan and the student approves the domain list (human-in-the-loop, per the guardrails below).
+- This is exactly the V1 engine (agenticSearch repo): robots-compliant BFS, sitemap seeding, JS rendering, extraction, politeness. It remains the deep-collection workhorse.
+KEY TEACHING POINT for GCAP3056: search answers "what is out there?"; crawling answers "what exactly does this trusted source say, in full?" Search finds the map; crawling collects the territory. Agentic search = the loop that alternates between them.
+PART 3 — V2 AGENT WORKFLOW (six building blocks per the OpenAI higher-ed agent guide)
+Job: "Help GCAP3056 students build a first-pass evidence pack for a civic-engagement report." One job, not everything.
+Primary user: GCAP3056 student writing a group report.
+Moment of use: research week, before writing begins.
+WORKFLOW STAGES (each stage = one tool call or one human checkpoint):
+1. INTAKE — capture topic, documents needed, research questions, target scope (the Input contract above). Agent restates them and asks for confirmation.
+2. PLAN — LLM generates search queries per research question (incl. English/Chinese variants, site-scoped queries like site:legco.gov.hk).
+3. PRELIMINARY SEARCH — execute queries via web search API; agent reads snippets, clusters results by domain and document type; identifies authoritative domains and data sources (e.g. data.gov.hk tables).
+4. CRAWL PROPOSAL (human checkpoint) — agent presents: proposed domains, expected artefact types, estimated pages. Student approves/edits. Green/yellow/red rules apply (Part 5).
+5. CRAWL — the approved plan runs through the V1 engine; full text extracted per page.
+6. SYNTHESIZE — LLM maps every crawled document to research questions; produces per-question evidence lists with quotes and dates; flags contradictions and gaps.
+7. GAPS + ITERATE — agent proposes follow-up searches or one more targeted crawl round for unanswered questions (bounded, e.g. max 2 iterations).
+8. OUTPUT — the evidence pack (Part 1) + coverage report + full citation list.
+9. FEEDBACK CAPTURE — student rates which results were actually useful; feeds the eval loop.
+PART 4 — WHAT CHANGES IN CODE (agenticSearch + frontend)
+1. NEW PLANNER MODULE (src/llm.js + src/planner.js) — LLM client (OpenRouter, key already present in frontend env) for: query generation, snippet triage, domain scoring, and the crawl proposal. Structured JSON output with schema validation.
+2. SEARCH TOOL (src/websearch.js) — pluggable search-API adapter (start: Brave or Tavily free tier; SearXNG self-host as fallback).
+3. AGENT LOOP (src/agent.js) — orchestrates stages 2-7 with bounded iterations and a state object (plan, search results, approved domains, evidence).
+4. SESSION STATE — store sessions (id, intake, plan, evidence pack) in Postgres so a student can resume and teachers can review.
+5. FRONTEND /pilot02 — intake form (topic, documents needed, research questions, scope) replacing the plain textarea; crawl-proposal approval step; per-research-question evidence view.
+6. V1 PRESERVED — pilot01 stays at /pilot untouched; V2 mounts at /pilot02.
+OSS REFERENCES TO BORROW FROM:
+- assafelovic/gpt-researcher (29k stars) — plan/search/synthesize loop, report outline generation.
+- dzhng/deep-research (20k) — iterative breadth-depth search with follow-up question generation.
+- Alibaba-NLP/DeepResearch (20k) — open-weights reference agent for research workflows.
+- crawl4ai (81k) — LLM-friendly markdown output (adopt: return markdown, not raw text).
+- apify/crawlee — request-queue architecture if V2 volume grows.
+- OpenAI guide: edunewsletter.openai.com/p/how-to-build-agents-for-higher-education (six building blocks; Build Sheet below).
+PART 5 — GUARDRAILS (green / yellow / red)
+GREEN (agent does directly): generate queries; run searches; summarize snippets; propose crawl plans; extract and organize crawled content.
+YELLOW (draft + human review): the domain list before any crawl; the evidence pack before use in the report; classification of a source as "official".
+RED (never): crawling a domain the student has not approved; fabricating quotes or dates; presenting unverified social-media claims as fact; crawling paywalled/personal-data sources.
+PART 6 — BUILD SHEET (filled per the OpenAI template)
+Agent name: GCAP3056 Agentic Search Agent (pilot02)
+Primary user: GCAP3056 student building a group report evidence pack
+Job to be done: turn topic + research questions into a structured, sourced evidence pack
+Moment of use: research week, first pass
+Inputs: topic, documents needed, research questions, target scope
+Approved knowledge sources: .gov.hk domains, data.gov.hk, legco.gov.hk, edb.gov.hk, major HK media (SCMP, RTHK, HK01, Ming Pao), academic sources as scoped by the student
+Tools: web search API (read), crawler (read), LLM (read/plan), Postgres index (write, student-approved)
+Workflow steps: intake → plan → search → propose → [approval] → crawl → synthesize → gaps → evidence pack
+Green/yellow/red: as Part 5
+Human approval points: crawl plan (mandatory); evidence pack (student review)
+Escalation rules: if searches return insufficient official sources, agent reports the gap instead of substituting unofficial sources silently
+Output format: evidence pack per research question + coverage report + citation list
+Test scenarios: fire at Tai Po Wang Fuk Court (news-driven, breaking event); e-health policy (policy-driven, official-heavy); flag-day regulation (regulation-driven, mixed) — each with expected source classes
+Evaluation criteria: accuracy, grounding (approved sources only), coverage per research question, judgment (asks for approval at the right time), usefulness (student rating per result)
+Pilot audience: one GCAP3056 group, one assignment cycle
+Owner: course teaching team; review cadence: per assignment cycle
+PART 7 — PHASES
+Phase 1 (skeleton): planner + web search adapter + crawl proposal step; /pilot02 intake form; LLM site selection replacing the fixed list. Deliverable: "fire in Tai Po Wang Fuk Court" produces an LLM-proposed, student-approved domain list (e.g. gov.hk press releases, FSD, LegCo, SCMP) instead of wikipedia/google.
+Phase 2 (evidence): crawl execution + per-research-question synthesis + coverage report; session state in Postgres.
+Phase 3 (polish): gap-iteration loop, export formats (Markdown/Docx-ready), feedback capture, evals before class use.
+OPEN QUESTIONS:
+1. Which web search API (Brave/Tavily free tiers vs SerpAPI paid vs self-hosted SearXNG)?
+2. Should the agent also search within data.gov.hk via CKAN API as a first-class tool (it already works)?
+3. Chinese-language query generation — required for HK topics; needs LLM prompt design + evaluation.
+4. Where does the evidence pack live — Postgres, Google Docs tab per group, or downloadable file?
