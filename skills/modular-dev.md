@@ -19,6 +19,7 @@ description: Discipline for developing the agenticSearch engine in small, testab
 | `src/crawler.js` | BFS frontier, meta-refresh, render fallback | storage |
 | `src/indexStore.js` | Postgres index: upsert, search, stats | crawl |
 | `server.mjs` | HTTP surface only | engine logic |
+| `skills/gdoc-tabs.md` | progress-log/plan writes to the GCAP3056 Google Doc (tab targeting, quirks) | — |
 
 ## 2. Rules
 
@@ -33,6 +34,7 @@ description: Discipline for developing the agenticSearch engine in small, testab
 2. Implement; keep `npm test` green.
 3. If the change affects crawl outcomes (extraction, robots, politeness), run `npm run test:regression` before commit.
 4. If endpoints changed, run `npm run test:e2e` against a deployed instance.
+5. If the change touches docs/plans/progress logs in the GCAP3056 Google Doc, follow `skills/gdoc-tabs.md` — write into the exact tab ID the user provides and verify the write with a plaintext re-fetch.
 
 ## 4. Never
 
