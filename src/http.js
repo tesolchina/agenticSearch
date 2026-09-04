@@ -15,12 +15,13 @@ export const UA =
 const strictAgent = new Agent();
 const lenientAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
-export async function fetchWithTimeout(url, timeoutMs = 15000, extraHeaders = {}) {
+export async function fetchWithTimeout(url, timeoutMs = 15000, extraHeaders = {}, init = {}) {
   const attempt = async (dispatcher) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       return await undiciFetch(url, {
+        ...init,
         signal: ctrl.signal,
         redirect: "follow",
         dispatcher,

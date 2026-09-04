@@ -34,11 +34,16 @@ function parseSse(text) {
 async function mcpCall(name, args) {
   const url = mcpUrl();
   if (!url) throw new Error("Composio not configured (COMPOSIO_MCP_SID/COMPOSIO_USER_ID missing)");
-  const res = await fetchWithTimeout(url, 120000, {
-    "x-api-key": process.env.COMPOSIO_API_KEY || "",
-    "Content-Type": "application/json",
-    Accept: "application/json, text/event-stream",
-  });
+  const res = await fetchWithTimeout(
+    url,
+    120000,
+    {
+      "x-api-key": process.env.COMPOSIO_API_KEY || "",
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    },
+    { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) }
+  );
   if (!res.ok) throw new Error(`Composio HTTP ${res.status}`);
   const text = await res.text();
   let payload = null;
