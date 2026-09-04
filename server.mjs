@@ -13,7 +13,8 @@ import express from "express";
 import { crawlSite, deriveTitles } from "./src/crawler.js";
 import { ensureIndexTable, buildFromDataGovHk, searchIndex, upsertPage } from "./src/indexStore.js";
 import { getPool } from "./src/indexStore.js";
-import { planFromIntake, llmAvailable } from "./src/planner.js";
+import { planFromIntake } from "./src/planner.js";
+import { llmAvailable } from "./src/llm.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
