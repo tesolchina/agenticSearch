@@ -8,16 +8,23 @@ import { extractPageSmart } from "./extract.js";
 import { keywordsFrom, scoreRelevance, scoreUrlBoost, summarize } from "./relevance.js";
 import { renderPage } from "./browser.js";
 
-export async function crawlSite(startUrl, objective, opts) {
-  if (process.env.CRAWL_DEBUG) console.log("[crawl] start", startUrl);
+export async function crawlSite(startUrls, objective, opts) {
+  if (process.env.CRAWL_DEBUG) console.log("[crawl] start", startUrls);
   const { maxPages, maxDepth, sameHostOnly } = opts;
-  const origin = new URL(startUrl).origin;
-  const startHost = new URL(startUrl).hostname.replace(/^www\./, "");
-  const robots = await getRobots(origin);
+  const starts = Array.isArray(startUrls) ? startUrls : [startUrls];
+  // allowed hosts: all seed hosts (V2 seeds are on-topic URLs found by search)
+  const startHosts = new Set(starts.map((u) => new URL(u).hostname.replace(/^www\./, "")));
+  const origins = new Set(starts.map((u) => new URL(u).origin));
+  const robotsCache = new Map();
   const keywords = keywordsFrom(objective);
 
+  async function robotsFor(origin) {
+    if (!robotsCache.has(origin)) robotsCache.set(origin, await getRobots(origin));
+    return robotsCache.get(origin);
+  }
+
   const visited = new Set();
-  const queue = [{ url: startUrl, depth: 0 }];
+  const queue = starts.map((url) => ({ url, depth: 0 }));
   const results = [];
   let fetched = 0;
   let rendered = 0;
@@ -25,12 +32,15 @@ export async function crawlSite(startUrl, objective, opts) {
 
   // Seed from sitemaps so JS-rendered sites (whose home pages are empty shells)
   // still get thoroughly crawled.
-  const smUrls = await getSitemapUrls(origin, robots.sitemaps, Math.max(maxPages * 2, 60));
-  for (const u of smUrls) {
-    const host = new URL(u).hostname.replace(/^www\./, "");
-    if (sameHostOnly && host !== startHost) continue;
-    if (!robotsAllows(robots, u)) continue;
-    if (!visited.has(u)) queue.push({ url: u, depth: 1 });
+  for (const origin of origins) {
+    const robots = await robotsFor(origin);
+    const smUrls = await getSitemapUrls(origin, robots.sitemaps, Math.max(maxPages * 2, 60));
+    for (const u of smUrls) {
+      const host = new URL(u).hostname.replace(/^www\./, "");
+      if (sameHostOnly && !startHosts.has(host)) continue;
+      if (!robotsAllows(robots, u)) continue;
+      if (!visited.has(u)) queue.push({ url: u, depth: 1 });
+    }
   }
 
   while (queue.length > 0 && fetched < maxPages) {
@@ -40,7 +50,8 @@ export async function crawlSite(startUrl, objective, opts) {
 
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "");
-    if (sameHostOnly && host !== startHost) continue;
+    if (sameHostOnly && !startHosts.has(host)) continue;
+    const robots = await robotsFor(u.origin);
     if (!robotsAllows(robots, url)) {
       if (process.env.CRAWL_DEBUG) console.log("[crawl] robots disallow", url);
       continue;

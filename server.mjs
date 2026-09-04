@@ -15,6 +15,8 @@ import { ensureIndexTable, buildFromDataGovHk, searchIndex, upsertPage } from ".
 import { getPool } from "./src/indexStore.js";
 import { planFromIntake } from "./src/planner.js";
 import { llmAvailable } from "./src/llm.js";
+import { createJob, getJob } from "./src/jobs.js";
+import { gdocsConfigured, createEvidenceDoc } from "./src/gdocs.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -23,8 +25,9 @@ app.get("/healthz", (req, res) =>
   res.json({ ok: true, llm: llmAvailable(), searchProvider: process.env.BRAVE_API_KEY ? "brave" : process.env.TAVILY_API_KEY ? "tavily" : "duckduckgo" })
 );
 
-// V2 stage 2-4: from intake to an approved-able crawl proposal
-app.post("/api/agent/plan", express.json({ limit: "1mb" }), async (req, res) => {
+// V2 stage 2-4: from intake to an approved-able crawl proposal (job-based so
+// the UI can report progress; the plan runs 14 queries + LLM calls).
+app.post("/api/agent/plan", express.json({ limit: "1mb" }), (req, res) => {
   const intake = {
     topic: (req.body?.topic || "").trim(),
     documentsNeeded: (req.body?.documentsNeeded || "").trim(),
@@ -35,12 +38,80 @@ app.post("/api/agent/plan", express.json({ limit: "1mb" }), async (req, res) => 
           .map((s) => s.trim())
     ).filter(Boolean).slice(0, 8),
     scope: (req.body?.scope || "").trim(),
+    feedback: (req.body?.feedback || "").trim(),
   };
   if (!intake.topic) return res.status(400).json({ error: "topic is required" });
+  const job = createJob("plan", ["Generate queries (EN + 中文)", "Run preliminary web searches", "Query data.gov.hk", "Propose domains"], async (setStage) => {
+    setStage("Generate queries (EN + 中文)");
+    const result = await planFromIntake(intake, setStage);
+    return result;
+  });
+  res.json({ jobId: job.id });
+});
+
+app.get("/api/jobs/:id", (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: "job not found" });
+  res.json(job);
+});
+
+// V2 stage 5: crawl with seeds (on-topic URLs from the plan) — job-based.
+app.post("/api/agent/crawl", express.json({ limit: "2mb" }), (req, res) => {
+  const objective = (req.body?.objective || "").trim();
+  const seeds = (req.body?.seeds || []).filter((s) => /^https?:\/\//.test(s)).slice(0, 60);
+  const domains = (req.body?.domains || []).map((d) => String(d).trim()).filter(Boolean).slice(0, 10);
+  const maxPages = Math.min(200, Math.max(1, Number(req.body?.maxPages) || 40));
+  const maxDepth = Math.min(5, Math.max(0, Number(req.body?.maxDepth) || 2));
+  if (!objective) return res.status(400).json({ error: "objective is required" });
+  if (seeds.length === 0 && domains.length === 0)
+    return res.status(400).json({ error: "seeds or domains required" });
+
+  const starts = seeds.length ? seeds : domains.map((d) => `https://${d}/`);
+  const job = createJob(
+    "crawl",
+    ["Check robots.txt", "Crawl approved domains", "Extract and score pages", "Rank results"],
+    async (setStage) => {
+      const perRun = Math.max(10, Math.ceil(maxPages));
+      const { results, fetched } = await crawlSite(starts, objective, {
+        maxPages: perRun,
+        maxDepth,
+        sameHostOnly: true,
+      });
+      setStage("Rank results");
+      const ranked = deriveTitles(results.sort((a, b) => b.relevance - a.relevance));
+      if (req.body?.index) {
+        for (const p of ranked) {
+          try {
+            await upsertPage(p);
+          } catch (e) {
+            console.error("[crawl] index page failed:", p.url, String(e.message || e).slice(0, 120));
+          }
+        }
+      }
+      return {
+        objective,
+        crawled_at: new Date().toISOString(),
+        seeds: starts.length,
+        fetched,
+        total_pages: ranked.length,
+        results: ranked.slice(0, maxPages),
+      };
+    }
+  );
+  res.json({ jobId: job.id });
+});
+
+// Export an evidence pack to Google Docs (course folder) via Composio.
+app.post("/api/export/gdocs", express.json({ limit: "2mb" }), async (req, res) => {
+  const title = (req.body?.title || "Evidence pack").trim();
+  const markdown = req.body?.markdown || "";
+  if (!markdown.trim()) return res.status(400).json({ error: "markdown is required" });
+  if (!gdocsConfigured())
+    return res.status(503).json({ error: "Google Docs export not configured (COMPOSIO_* / GDRIVE_FOLDER_ID)" });
   try {
-    res.json(await planFromIntake(intake));
+    res.json(await createEvidenceDoc(title, markdown));
   } catch (err) {
-    console.error("agent plan error:", err);
+    console.error("gdocs export error:", err);
     res.status(500).json({ error: String(err.message || err) });
   }
 });

@@ -105,6 +105,8 @@ async function searchCkan(topic, limit) {
 }
 
 // Stage 4: propose crawl domains with rationale + expected artefacts.
+// `feedback` (student revision request from the previous plan) is folded into
+// the proposal prompt.
 export async function proposeDomains(intake, searches, ckanHits) {
   const domainStats = {};
   for (const s of searches) {
@@ -144,11 +146,14 @@ export async function proposeDomains(intake, searches, ckanHits) {
       .join("\n\n")
       .slice(0, 9000);
     const ckanList = ckanHits.map((c) => `- [dataset] ${c.title} (${c.url})`).join("\n").slice(0, 2500);
+    const feedbackLine = intake.feedback
+      ? `\nThe student previously asked to revise the plan. Follow this feedback: "${intake.feedback}"`
+      : "";
     const user = `Research brief:
 Topic: ${intake.topic}
 Documents needed: ${intake.documentsNeeded || "(not specified)"}
 Research questions: ${(intake.researchQuestions || []).join(" | ")}
-Scope: ${intake.scope || "(not specified)"}
+Scope: ${intake.scope || "(not specified)"}${feedbackLine}
 
 Preliminary search evidence:
 ${evidence}
@@ -185,10 +190,14 @@ Propose 5-8 domains to crawl deeply. For each: why it is authoritative for this 
   }
 }
 
-// Full stage 2-4 chain used by POST /api/agent/plan
-export async function planFromIntake(intake) {
+// Full stage 2-4 chain used by POST /api/agent/plan (job-based; setStage reports progress)
+export async function planFromIntake(intake, setStage = () => {}) {
+  setStage("Generate queries (EN + 中文)");
   const queries = await generateQueries(intake);
+  setStage("Run preliminary web searches");
   const { searches, ckanHits } = await runSearches(queries);
+  setStage("Query data.gov.hk");
+  setStage("Propose domains");
   const { proposals, llm } = await proposeDomains(intake, searches, ckanHits);
   return {
     intake,
