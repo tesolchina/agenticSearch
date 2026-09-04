@@ -1,0 +1,27 @@
+{
+  "name": "agenticsearch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone agentic web-search engine: thorough crawler, data.gov.hk index, search API. Extracted from the GCAP3056 Search Pilot.",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/unit.test.mjs",
+    "test:e2e": "node test/e2e.mjs",
+    "test:regression": "node test/regression.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "cheerio": "^1.1.2",
+    "express": "^4.19.2",
+    "jsdom": "^27.0.0",
+    "pg": "^8.12.2",
+    "playwright": "^1.57.0",
+    "robots-parser": "^3.0.1",
+    "undici": "^7.16.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
