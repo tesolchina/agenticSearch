@@ -79,11 +79,10 @@ export async function createEvidenceDoc(title, markdown) {
   // move into the course folder
   try {
     await mcpCall("GOOGLEDRIVE_ADD_PARENT", {
-      file_id: docId,
-      folder_id: process.env.GDRIVE_FOLDER_ID,
+      id: process.env.GDRIVE_FOLDER_ID, // parent folder
+      fileId: docId, // the doc to file under it
     });
   } catch (e) {
-    // doc exists even if folder move fails
     console.log("[gdocs] add-parent failed:", String(e.message || e).slice(0, 120));
   }
 
