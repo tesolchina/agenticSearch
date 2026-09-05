@@ -76,7 +76,7 @@ export async function createEvidenceDoc(title, markdown) {
   const docId = data.documentId;
   const docUrl = data.display_url || `https://docs.google.com/document/d/${docId}/edit`;
 
-  // move into the course folder (anyone with the link can comment)
+  // move into the course folder
   try {
     await mcpCall("GOOGLEDRIVE_ADD_PARENT", {
       file_id: docId,
@@ -85,6 +85,17 @@ export async function createEvidenceDoc(title, markdown) {
   } catch (e) {
     // doc exists even if folder move fails
     console.log("[gdocs] add-parent failed:", String(e.message || e).slice(0, 120));
+  }
+
+  // share as "anyone with the link can comment"
+  try {
+    await mcpCall("GOOGLEDRIVE_CREATE_PERMISSION", {
+      file_id: docId,
+      type: "anyone",
+      role: "commenter",
+    });
+  } catch (e) {
+    console.log("[gdocs] share failed:", String(e.message || e).slice(0, 120));
   }
   return { docId, docUrl };
 }

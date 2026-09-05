@@ -17,6 +17,7 @@ import { planFromIntake } from "./src/planner.js";
 import { llmAvailable } from "./src/llm.js";
 import { createJob, getJob } from "./src/jobs.js";
 import { gdocsConfigured, createEvidenceDoc } from "./src/gdocs.js";
+import { ensureSessionTable, createSession, getSession, updateSession } from "./src/sessionStore.js";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -53,6 +54,43 @@ app.get("/api/jobs/:id", (req, res) => {
   const job = getJob(req.params.id);
   if (!job) return res.status(404).json({ error: "job not found" });
   res.json(job);
+});
+
+// ---------------------------------------------------------------------------
+// Sessions: named, persisted, shareable (students resume across devices via a
+// unique link /pilot02?s=<id>).
+// ---------------------------------------------------------------------------
+app.post("/api/session", express.json({ limit: "1mb" }), async (req, res) => {
+  try {
+    await ensureSessionTable();
+    const s = await createSession(req.body || {});
+    res.json({ ...s, url: `/pilot02?s=${s.id}` });
+  } catch (err) {
+    console.error("create session error:", err);
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+app.get("/api/session/:id", async (req, res) => {
+  try {
+    await ensureSessionTable();
+    const s = await getSession(req.params.id);
+    if (!s) return res.status(404).json({ error: "session not found" });
+    res.json(s);
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+app.put("/api/session/:id", express.json({ limit: "2mb" }), async (req, res) => {
+  try {
+    await ensureSessionTable();
+    const s = await updateSession(req.params.id, req.body || {});
+    if (!s) return res.status(404).json({ error: "session not found" });
+    res.json(s);
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
 });
 
 // V2 stage 5: crawl with seeds (on-topic URLs from the plan) — job-based.
@@ -188,5 +226,6 @@ app.get("/api/index/search", async (req, res) => {
 });
 
 ensureIndexTable().catch((e) => console.error("ensureIndexTable error:", e));
+ensureSessionTable().catch((e) => console.error("ensureSessionTable error:", e));
 
 app.listen(PORT, () => console.log(`agenticSearch listening on ${PORT}`));
