@@ -1,8 +1,18 @@
 # agenticSearch
 
 Standalone agentic web-search engine for the GCAP3056 Search Pilot
-(https://search.simonsays.hk/pilot). Extracted from the course-site monolith so
+(https://search.simonsays.hk/pilot02). Extracted from the course-site monolith so
 the engine can evolve (and be tested) independently of the frontend.
+
+> **Canonical working repo** — from 2026-09-05 onward, feature work on the
+> search pilot is done here and then embedded/referenced by the GCAP3056
+> frontend (`tesolchina/gcap3056-22726`), which proxies `/api/*` to this
+> service.
+>
+> **Requirements & progress** are tracked in the course Google Doc:
+> https://docs.google.com/document/d/1yPWi938CDuSwfGCSTyqRIngdoXXkaFWrI7PlBgz6i7Y
+> (tabs: request 1 / v2 plan / update on v2 / feedback on v2.x). Update progress
+> there per `skills/gdoc-tabs.md` after each change.
 
 ## Architecture (modular)
 
